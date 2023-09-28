@@ -165,7 +165,3 @@ out/
 pti_out/
 interpolation_out/
 models/
-
-# viz
-viz/
-visualizer.py
