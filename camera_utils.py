@@ -16,6 +16,7 @@ import math
 
 import torch
 import torch.nn as nn
+import numpy as np
 
 from training.volumetric_rendering import math_utils
 
@@ -54,6 +55,19 @@ class GaussianCameraPoseSampler:
         forward_vectors = math_utils.normalize_vecs(-camera_origins)
         return create_cam2world_matrix(forward_vectors, camera_origins)
 
+
+class RotateCamInCirclePerPtoZWhileLookingAt:
+
+    @staticmethod
+    def sample(lookat_position, z_dist, circle_radius, rot_angle, batch_size=1, device='cpu'):
+        camera_origins = torch.zeros((batch_size, 3), device=device)
+
+        camera_origins[:, 0:1] = circle_radius * np.cos(rot_angle)  # x
+        camera_origins[:, 2:3] = z_dist  # z
+        camera_origins[:, 1:2] = circle_radius * np.sin(rot_angle)  # y
+
+        forward_vectors = math_utils.normalize_vecs(lookat_position-camera_origins)
+        return create_cam2world_matrix(forward_vectors, camera_origins)
 
 class LookAtPoseSampler:
     """

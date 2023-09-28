@@ -19,7 +19,7 @@ import mrcfile
 
 import legacy
 
-from camera_utils import LookAtPoseSampler
+from camera_utils import LookAtPoseSampler, RotateCamInCirclePerPtoZWhileLookingAt
 from torch_utils import misc
 from training.triplane import TriPlaneGenerator
 #----------------------------------------------------------------------------
@@ -115,14 +115,23 @@ def gen_interp_video(G, mp4: str, seeds, pose_cond, shuffle_seed=None, w_frames=
         outdir = 'interpolation_{}_{}/'.format(all_seeds[0], all_seeds[1])
         os.makedirs(outdir, exist_ok=True)
     all_poses = []
+    rand_w_off = None
+    circle_radiuous = 0.5
+    rot_angles = np.linspace(0, 2 * np.pi, num_keyframes * w_frames + 1)[:-1]
+    cam_pivot = torch.tensor(G.rendering_kwargs.get('avg_camera_pivot', [0, 0, 0]), device=device)
+    cam_radius = 2.7
     for frame_idx in tqdm(range(num_keyframes * w_frames)):
         imgs = []
         for yi in range(grid_h):
             for xi in range(grid_w):
                 if cfg == "Head":
                     pitch_range = 0.5
-                    cam2world_pose = LookAtPoseSampler.sample(3.14/2 + 2 * 3.14 * frame_idx / (num_keyframes * w_frames),  3.14/2 -0.05 + pitch_range * np.sin(2 * 3.14 * frame_idx / (num_keyframes * w_frames)),
-                                                            camera_lookat_point, radius=2.7, device=device)
+                    cam2world_pose = RotateCamInCirclePerPtoZWhileLookingAt.sample(
+                        cam_pivot, z_dist=np.sqrt(cam_radius ** 2 - circle_radiuous ** 2),
+                        circle_radius=circle_radiuous,
+                        rot_angle=rot_angles[frame_idx], device=device)
+                    # cam2world_pose = LookAtPoseSampler.sample(3.14/2 + 2 * 3.14 * frame_idx / (num_keyframes * w_frames),  3.14/2 -0.05 + pitch_range * np.sin(2 * 3.14 * frame_idx / (num_keyframes * w_frames)),
+                    #                                         camera_lookat_point, radius=2.7, device=device)
                 else:
                     pitch_range = 0.25
                     yaw_range = 1.5 # 0.35
@@ -133,8 +142,15 @@ def gen_interp_video(G, mp4: str, seeds, pose_cond, shuffle_seed=None, w_frames=
                 intrinsics = torch.tensor([[4.2647, 0, 0.5], [0, 4.2647, 0.5], [0, 0, 1]], device=device)
                 c = torch.cat([cam2world_pose.reshape(-1, 16), intrinsics.reshape(-1, 9)], 1)
 
+                # import ipdb; ipdb.set_trace()
+
                 interp = grid[yi][xi]
                 w = torch.from_numpy(interp(frame_idx / w_frames)).to(device)
+                # uncomment to see effect of w corruption
+                # if 310 > 2 * 3.14 * frame_idx / (num_keyframes * w_frames) * 180/3.14 > 50:
+                #     if rand_w_off is None:
+                #         rand_w_off = torch.randn_like(w)
+                #     w = w + rand_w_off * 1.1 * (np.cos(2 * 3.14 * frame_idx / (num_keyframes * w_frames)) - np.cos(50/180*3.14))
                 
                 entangle = 'camera'
                 if entangle == 'conditioning':

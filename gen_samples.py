@@ -179,7 +179,8 @@ def generate_images(
         imgs = []
         angle_p = -0.2
         # for angle_y, angle_p in [(2.1, angle_p), (1.05, angle_p), (0, angle_p), (-1.05, angle_p), (-2.1, angle_p)]:
-        for idx, angles in enumerate([(0, angle_p), (-45/180*np.pi, angle_p), (-90/180*np.pi, angle_p), (-135/180*np.pi, angle_p), (-np.pi, angle_p)]):
+        # for idx, angles in enumerate([(0, angle_p), (-45/180*np.pi, angle_p), (-90/180*np.pi, angle_p), (-135/180*np.pi, angle_p), (-np.pi, angle_p)]):
+        for idx, angles in enumerate([(50/180*np.pi, angle_p), (25/180*np.pi, angle_p), (0, angle_p), (-25/180*np.pi, angle_p), (-50/180*np.pi, angle_p)]):
             angle_y = angles[0]
             angle_p = angles[1]
             # rand camera setting
