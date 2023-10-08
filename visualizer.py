@@ -27,6 +27,7 @@ from viz import trunc_noise_widget
 from viz import performance_widget
 from viz import capture_widget
 from viz import webcam_widget
+from viz import image_inversion_widget
 from viz import webcam_widget_motion
 from viz import backbone_cache_widget
 from viz import layer_widget
@@ -71,7 +72,11 @@ class Visualizer(imgui_window.ImguiWindow):
         self.render_type_widget = render_type_widget.RenderTypeWidget(self)
         self.render_depth_sample_widget = render_depth_sample_widget.RenderDepthSampleWidget(self)
         #self.webcam_widget = webcam_widget.WebcamWidget(self)
-        self.webcam_widget = webcam_widget_motion.WebcamWidget(self)
+        self.webcam_widget_motion = webcam_widget_motion.WebcamWidget(self)
+
+        self.webcam_widget = webcam_widget.WebcamWidget(self)
+        self.image_inversion_widget = image_inversion_widget.InvImgWidget(self, self.pickle_widget.set_pickle)
+
 
         if capture_dir is not None:
             self.capture_widget.path = capture_dir
@@ -151,16 +156,21 @@ class Visualizer(imgui_window.ImguiWindow):
         self.perf_widget(expanded)
         self.capture_widget(expanded)
         self.webcam_widget(expanded)
+        self.webcam_widget_motion(expanded)
         expanded, _visible = imgui_utils.collapsing_header('Layers & channels', default=True)
         self.backbone_cache_widget(expanded)
         self.layer_widget(expanded)
+        expanded, _visible = imgui_utils.collapsing_header('Motion', default=True)
+
+        expanded, _visible = imgui_utils.collapsing_header('Model building', default=True)
+        self.image_inversion_widget(expanded)
 
         # Render.
         if self.is_skipping_frames():
             pass
         elif self._defer_rendering > 0:
             self._defer_rendering -= 1
-        elif self.args.pkl is not None:
+        elif getattr(self.args, 'pkl', None) is not None:
             self._async_renderer.set_args(**self.args)
             result = self._async_renderer.get_result()
             if result is not None:
@@ -325,6 +335,7 @@ def main(
 #----------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn')
     main()
 
 #----------------------------------------------------------------------------

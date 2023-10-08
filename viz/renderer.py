@@ -8,6 +8,7 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
+import os
 import sys
 import copy
 import traceback
@@ -134,6 +135,8 @@ class Renderer:
         self._end_event     = torch.cuda.Event(enable_timing=True)
         self._net_layers    = dict()    # {cache_key: [dnnlib.EasyDict, ...], ...}
         self._last_model_input = None
+        self.pkl = None
+        self.prev_inv_w_path = None
 
     def render(self, **args):
         self._is_timing = True
@@ -236,130 +239,153 @@ class Renderer:
         x = torch.nn.functional.embedding(x, cmap)
         return x
 
+    def changed_pkl(self, pkl):
+        if self.pkl == pkl:
+            return False
+        else:
+            self.pkl = pkl
+            return True
+
     def _render_impl(self, res,
-        pkl             = None,
-        w0_seeds        = [[0, 1]],
-        stylemix_idx    = [],
-        stylemix_seed   = 0,
-        trunc_psi       = 1,
-        trunc_cutoff    = 0,
-        random_seed     = 0,
-        noise_mode      = 'const',
-        force_fp32      = False,
-        layer_name      = None,
-        sel_channels    = 3,
-        base_channel    = 0,
-        img_scale_db    = 0,
-        img_normalize   = False,
-        fft_show        = False,
-        fft_all         = True,
-        fft_range_db    = 50,
-        fft_beta        = 8,
-        input_transform = None,
-        untransform     = False,
+                     pkl             = None,
+                     w0_seeds        = [[0, 1]],
+                     stylemix_idx    = [],
+                     stylemix_seed   = 0,
+                     trunc_psi       = 0.3,
+                     trunc_cutoff    = 0,
+                     random_seed     = 0,
+                     noise_mode      = 'const',
+                     force_fp32      = False,
+                     layer_name      = None,
+                     sel_channels    = 3,
+                     base_channel    = 0,
+                     img_scale_db    = 0,
+                     img_normalize   = False,
+                     fft_show        = False,
+                     fft_all         = True,
+                     fft_range_db    = 50,
+                     fft_beta        = 8,
+                     input_transform = None,
+                     untransform     = False,
 
-        yaw             = 0,
-        pitch           = 0,
-        lookat_point    = (0, 0, 0.2),
-        conditioning_yaw    = 0,
-        conditioning_pitch  = 0,
-        focal_length    = 4.2647,
-        render_type     = 'image',
+                     yaw             = 0,
+                     pitch           = 0,
+                     lookat_point    = (0, 0, 0.2),
+                     conditioning_yaw    = 0,
+                     conditioning_pitch  = 0,
+                     focal_length    = 4.2647,
+                     render_type     = 'image',
 
-        do_backbone_caching = False,
+                     do_backbone_caching = False,
 
-        depth_mult            = 1,
-        depth_importance_mult = 1,
-    ):
-        # Dig up network details.
-        G = self.get_network(pkl, 'G_ema').eval().requires_grad_(False).to('cuda')
-        res.img_resolution = G.img_resolution
-        res.num_ws = G.backbone.num_ws
-        res.has_noise = any('noise_const' in name for name, _buf in G.backbone.named_buffers())
-        res.has_input_transform = (hasattr(G.backbone, 'input') and hasattr(G.backbone.input, 'transform'))
+                     depth_mult            = 1,
+                     depth_importance_mult = 1,):
+        if self.changed_pkl(pkl):
+            self._last_model_input = None
+            self.prev_inv_w_path = None
+            self.inv_w_path = os.path.join(os.path.dirname(pkl), 'projected_w.npz')
+            if not os.path.exists(self.inv_w_path):
+                self.inv_w_path = ''
 
-        # set G rendering kwargs
-        if 'depth_resolution_default' not in G.rendering_kwargs:
-            G.rendering_kwargs['depth_resolution_default'] = G.rendering_kwargs['depth_resolution']
-            G.rendering_kwargs['depth_resolution_importance_default'] = G.rendering_kwargs['depth_resolution_importance']
+            self.generator = self.get_network(pkl, 'G_ema').eval().requires_grad_(False).to('cuda')
+            res.img_resolution = self.generator.img_resolution
+            res.num_ws = self.generator.backbone.num_ws
+            res.has_noise = any('noise_const' in name for name, _buf in self.generator.backbone.named_buffers())
+            res.has_input_transform = (hasattr(self.generator.backbone, 'input') and hasattr(self.generator.backbone.input, 'transform'))
 
-        G.rendering_kwargs['depth_resolution'] = int(G.rendering_kwargs['depth_resolution_default'] * depth_mult)
-        G.rendering_kwargs['depth_resolution_importance'] = int(G.rendering_kwargs['depth_resolution_importance_default'] * depth_importance_mult)
+            # set G rendering kwargs
+            if 'depth_resolution_default' not in self.generator.rendering_kwargs:
+                self.generator.rendering_kwargs['depth_resolution_default'] = self.generator.rendering_kwargs['depth_resolution']
+                self.generator.rendering_kwargs['depth_resolution_importance_default'] = self.generator.rendering_kwargs['depth_resolution_importance']
 
-        # Set input transform.
-        if res.has_input_transform:
-            m = np.eye(3)
-            try:
-                if input_transform is not None:
-                    m = np.linalg.inv(np.asarray(input_transform))
-            except np.linalg.LinAlgError:
-                res.error = CapturedException()
-            G.synthesis.input.transform.copy_(torch.from_numpy(m))
+            self.generator.rendering_kwargs['depth_resolution'] = int(self.generator.rendering_kwargs['depth_resolution_default'] * depth_mult)
+            self.generator.rendering_kwargs['depth_resolution_importance'] = int(self.generator.rendering_kwargs['depth_resolution_importance_default'] * depth_importance_mult)
+
+            # Set input transform.
+            if res.has_input_transform:
+                m = np.eye(3)
+                try:
+                    if input_transform is not None:
+                        m = np.linalg.inv(np.asarray(input_transform))
+                except np.linalg.LinAlgError:
+                    res.error = CapturedException()
+                self.generator.synthesis.input.transform.copy_(torch.from_numpy(m))
 
         # Generate random latents.
-        all_seeds = [seed for seed, _weight in w0_seeds] + [stylemix_seed]
-        all_seeds = list(set(all_seeds))
-        all_zs = np.zeros([len(all_seeds), G.z_dim], dtype=np.float32)
-        all_cs = np.zeros([len(all_seeds), G.c_dim], dtype=np.float32)
-        for idx, seed in enumerate(all_seeds):
-            rnd = np.random.RandomState(seed)
-            all_zs[idx] = rnd.randn(G.z_dim)
+        if self.inv_w_path == '':
+            self.all_seeds = [seed for seed, _weight in w0_seeds] + [stylemix_seed]
+            self.all_seeds = list(set(self.all_seeds))
+            self.all_zs = self.to_device(torch.zeros([len(self.all_seeds), self.generator.z_dim], dtype=torch.float32))
+            self.all_cs = self.to_device(torch.zeros([len(self.all_seeds), self.generator.c_dim], dtype=torch.float32))
+            for self.idx, seed in enumerate(self.all_seeds):
+                torch.manual_seed(seed)
+                self.all_zs[self.idx] = torch.randn(self.generator.z_dim) * 0.01
         if lookat_point is None:
-            camera_pivot = torch.tensor(G.rendering_kwargs.get('avg_camera_pivot', (0, 0, 0)))
+            self.camera_pivot = torch.tensor(self.generator.rendering_kwargs.get('avg_camera_pivot', (0, 0, 0)))
         else:
             # override lookat point provided
-            camera_pivot = torch.tensor(lookat_point)
-        camera_radius = G.rendering_kwargs.get('avg_camera_radius', 2.7)
-        forward_cam2world_pose = LookAtPoseSampler.sample(3.14/2 + conditioning_yaw, 3.14/2 + conditioning_pitch, camera_pivot, radius=camera_radius)
+            self.camera_pivot = torch.tensor(lookat_point)
+        # import ipdb; ipdb.set_trace()
+        self.camera_radius = self.generator.rendering_kwargs.get('avg_camera_radius', 2.7)
+        forward_cam2world_pose = LookAtPoseSampler.sample(3.14/2 + conditioning_yaw, 3.14/2 + conditioning_pitch,
+                                                          self.camera_pivot, radius=self.camera_radius)
         intrinsics = torch.tensor([[focal_length, 0, 0.5], [0, focal_length, 0.5], [0, 0, 1]])
         conditioning_params = torch.cat([forward_cam2world_pose.reshape(16), intrinsics.reshape(9)], 0)
-        all_cs[idx, :] = conditioning_params.numpy()
+        if self.inv_w_path == '':
+            self.all_cs[self.idx, :] = conditioning_params
 
 
-        # Run mapping network.
-        # w_avg = G.mapping.w_avg
-        w_avg = G.backbone.mapping.w_avg
-        all_zs = self.to_device(torch.from_numpy(all_zs))
-        all_cs = self.to_device(torch.from_numpy(all_cs))
-        all_ws = G.mapping(z=all_zs, c=all_cs, truncation_psi=trunc_psi, truncation_cutoff=trunc_cutoff) - w_avg
-        all_ws = dict(zip(all_seeds, all_ws))
+        if self.inv_w_path == '':
+            # Run mapping network.
+            # w_avg = G.mapping.w_avg
+            w_avg = self.generator.backbone.mapping.w_avg
+            # self.all_zs = self.to_device(torch.from_numpy(self.all_zs))
+            # self.all_cs = self.to_device(torch.from_numpy(self.all_cs))
+            all_ws = self.generator.mapping(z=self.all_zs, c=self.all_cs, truncation_psi=trunc_psi, truncation_cutoff=trunc_cutoff) - w_avg
+            all_ws = dict(zip(self.all_seeds, all_ws))
 
-        # Calculate final W.
-        w = torch.stack([all_ws[seed] * weight for seed, weight in w0_seeds]).sum(dim=0, keepdim=True)
-        stylemix_idx = [idx for idx in stylemix_idx if 0 <= idx < G.backbone.num_ws]
-        if len(stylemix_idx) > 0:
-            w[:, stylemix_idx] = all_ws[stylemix_seed][np.newaxis, stylemix_idx]
-        w += w_avg
+            # Calculate final W.
+            self.w_vec = torch.stack([all_ws[seed] * weight for seed, weight in w0_seeds]).sum(dim=0, keepdim=True)
+            self.w_vec *= trunc_psi
+            stylemix_idx = [idx for idx in stylemix_idx if 0 <= idx < self.generator.backbone.num_ws]
+            if len(stylemix_idx) > 0:
+                self.w_vec[:, stylemix_idx] = all_ws[stylemix_seed][np.newaxis, stylemix_idx]
+            self.w_vec += w_avg
+        elif self.inv_w_path != self.prev_inv_w_path:
+            # load W from the inversion
+            print(f'pkl path: {pkl}, w_path {self.inv_w_path}')
+            self.w_vec = self.to_device(torch.from_numpy(np.load(self.inv_w_path)['w'].astype(np.float32)))
+            self.prev_inv_w_path = self.inv_w_path
 
         # Run synthesis network.
         synthesis_kwargs = dnnlib.EasyDict(noise_mode=noise_mode, force_fp32=force_fp32, cache_backbone=do_backbone_caching)
         torch.manual_seed(random_seed)
 
         # Set camera params
-        pose = LookAtPoseSampler.sample(3.14/2 + yaw, 3.14/2 + pitch, camera_pivot, radius=camera_radius)
+        pose = LookAtPoseSampler.sample(3.14/2 + yaw, 3.14/2 + pitch, self.camera_pivot, radius=self.camera_radius)
         intrinsics = torch.tensor([[focal_length, 0, 0.5], [0, focal_length, 0.5], [0, 0, 1]])
-        c = torch.cat([pose.reshape(-1, 16), intrinsics.reshape(-1, 9)], 1).to(w.device)
+        c = torch.cat([pose.reshape(-1, 16), intrinsics.reshape(-1, 9)], 1).to(self.w_vec.device)
 
         # Backbone caching
-        if do_backbone_caching and self._last_model_input is not None and torch.all(self._last_model_input == w):
+        if do_backbone_caching and self._last_model_input is not None and torch.all(self._last_model_input == self.w_vec):
             synthesis_kwargs.use_cached_backbone = True
         else:
             synthesis_kwargs.use_cached_backbone = False
-        self._last_model_input = w
-        out, layers = self.run_synthesis_net(G, w, c, capture_layer=layer_name, **synthesis_kwargs)
+        self._last_model_input = self.w_vec
+        out, layers = self.run_synthesis_net(self.generator, self.w_vec, c, capture_layer=layer_name, **synthesis_kwargs)
 
         # Update layer list.
-        cache_key = (G.synthesis, tuple(sorted(synthesis_kwargs.items())))
+        cache_key = (self.generator.synthesis, tuple(sorted(synthesis_kwargs.items())))
         if cache_key not in self._net_layers:
             if layer_name is not None:
                 torch.manual_seed(random_seed)
-                _out, layers = self.run_synthesis_net(G, w, c, **synthesis_kwargs)
+                _out, layers = self.run_synthesis_net(self.generator, self.w_vec, c, **synthesis_kwargs)
             self._net_layers[cache_key] = layers
         res.layers = self._net_layers[cache_key]
 
         # Untransform.
         if untransform and res.has_input_transform:
-            out, _mask = _apply_affine_transformation(out.to(torch.float32), G.synthesis.input.transform, amax=6) # Override amax to hit the fast path in upfirdn2d.
+            out, _mask = _apply_affine_transformation(out.to(torch.float32), self.generator.synthesis.input.transform, amax=6) # Override amax to hit the fast path in upfirdn2d.
 
         # Select channels and compute statistics.
         if type(out) == dict:

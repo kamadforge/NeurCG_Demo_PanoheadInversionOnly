@@ -29,13 +29,14 @@ def _locate_results(pattern):
 class PickleWidget:
     def __init__(self, viz):
         self.viz            = viz
-        self.search_dirs    = []
+        self.search_dirs    = ['/home/pghosh/NeurCG_Assets/',]
         self.cur_pkl        = None
         self.user_pkl       = ''
         self.recent_pkls    = []
         self.browse_cache   = dict() # {tuple(path, ...): [dnnlib.EasyDict(), ...], ...}
         self.browse_refocus = False
         self.load('', ignore_errors=True)
+        self.new_activity = False
 
     def add_recent(self, pkl, ignore_errors=False):
         try:
@@ -45,6 +46,9 @@ class PickleWidget:
         except:
             if not ignore_errors:
                 raise
+
+    def set_pickle(self, pkl):
+        self.cur_pkl = pkl
 
     def load(self, pkl, ignore_errors=False):
         viz = self.viz
@@ -130,7 +134,8 @@ class PickleWidget:
         if paths is not None and len(paths) >= 1:
             self.load(paths[0], ignore_errors=True)
 
-        viz.args.pkl = self.cur_pkl
+        if getattr(viz.args, 'pkl', None) is None:
+            viz.args.pkl = self.cur_pkl
 
     def list_runs_and_pkls(self, parents):
         items = []
