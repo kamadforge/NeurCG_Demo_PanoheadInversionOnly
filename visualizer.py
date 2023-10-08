@@ -27,6 +27,7 @@ from viz import trunc_noise_widget
 from viz import performance_widget
 from viz import capture_widget
 from viz import webcam_widget
+from viz import webcam_widget_motion
 from viz import backbone_cache_widget
 from viz import layer_widget
 from viz import pose_widget
@@ -69,7 +70,8 @@ class Visualizer(imgui_window.ImguiWindow):
         self.conditioning_pose_widget        = conditioning_pose_widget.ConditioningPoseWidget(self)
         self.render_type_widget = render_type_widget.RenderTypeWidget(self)
         self.render_depth_sample_widget = render_depth_sample_widget.RenderDepthSampleWidget(self)
-        self.webcam_widget = webcam_widget.WebcamWidget(self)
+        #self.webcam_widget = webcam_widget.WebcamWidget(self)
+        self.webcam_widget = webcam_widget_motion.WebcamWidget(self)
 
         if capture_dir is not None:
             self.capture_widget.path = capture_dir
