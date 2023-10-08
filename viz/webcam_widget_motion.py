@@ -33,8 +33,10 @@ print("p", p)
 # sys.path.append(str(p))
 # print("p", p)
 #puzzle = __import__('....3D.motion_motion.demo_live')
-print(sys.path)
-from t3D.motion_model.demo_live import main, load_checkpts, first_frame, get_args
+#print(sys.path)
+#from t3D.motion_model.demo_live import main, load_checkpts, first_frame, get_args
+from motion_model.demo_live import main, load_checkpts, first_frame, get_args
+
 
 #----------------------------------------------------------------------------
 

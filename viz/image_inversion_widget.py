@@ -53,7 +53,7 @@ def invert(inv_q, network, img):
 
 class InvImgWidget:
     def __init__(self, viz, set_pkl_path):
-        self._path_init = '/home/kamil/Dropbox/Current_research/t3D/NeurCG_Live_Demo/_screenshots'
+        self._path_init = 'inversion_im'
         self.viz            = viz
         self.cur_img        = ''
         self.path_sofar = self._path_init
