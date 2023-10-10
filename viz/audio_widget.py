@@ -172,7 +172,7 @@ class AudioWidget:
                     # Path to video file
                     print(self.video_path)
                     self.vidObj = cv2.VideoCapture(self.video_path)
-                    self.player = MediaPlayer(self.video_path)
+                    #self.player = MediaPlayer(self.video_path)
                     self.play=1
 
 
