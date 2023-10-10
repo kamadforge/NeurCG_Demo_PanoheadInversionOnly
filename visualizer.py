@@ -36,6 +36,7 @@ from viz import zoom_widget
 from viz import conditioning_pose_widget
 from viz import render_type_widget
 from viz import render_depth_sample_widget
+from viz import audio_widget
 
 #----------------------------------------------------------------------------
 
@@ -73,6 +74,7 @@ class Visualizer(imgui_window.ImguiWindow):
         self.render_depth_sample_widget = render_depth_sample_widget.RenderDepthSampleWidget(self)
         #self.webcam_widget = webcam_widget.WebcamWidget(self)
         self.webcam_widget_motion = webcam_widget_motion.WebcamWidget(self)
+        self.audio_widget = audio_widget.AudioWidget(self)
 
         self.webcam_widget = webcam_widget.WebcamWidget(self)
         self.image_inversion_widget = image_inversion_widget.InvImgWidget(self, self.pickle_widget.set_pickle)
@@ -157,6 +159,7 @@ class Visualizer(imgui_window.ImguiWindow):
         self.capture_widget(expanded)
         self.webcam_widget(expanded)
         self.webcam_widget_motion(expanded)
+        self.audio_widget(expanded)
         expanded, _visible = imgui_utils.collapsing_header('Layers & channels', default=True)
         self.backbone_cache_widget(expanded)
         self.layer_widget(expanded)
