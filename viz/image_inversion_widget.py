@@ -53,7 +53,7 @@ def invert(inv_q, network, img):
 
 class InvImgWidget:
     def __init__(self, viz, set_pkl_path):
-        self._path_init = 'inversion_im'
+        self._path_init = '_screenshots'
         self.viz            = viz
         self.cur_img        = ''
         self.path_sofar = self._path_init

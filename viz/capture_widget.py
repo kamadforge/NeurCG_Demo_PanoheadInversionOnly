@@ -15,6 +15,7 @@ import imgui
 import PIL.Image
 from gui_utils import imgui_utils
 from . import renderer
+import sys
 
 #----------------------------------------------------------------------------
 
@@ -57,7 +58,11 @@ class CaptureWidget:
                 pil_image = PIL.Image.fromarray(image[:, :, 0], 'L')
             else:
                 pil_image = PIL.Image.fromarray(image, 'RGB')
-            pil_image.save(os.path.join(self.path, extra_folder, f'{file_id:05d}.png'))
+
+            img_with_bg = os.path.join(self.path, extra_folder, f'{file_id:05d}.png')
+            pil_image.save(img_with_bg)
+            # to redirect stderr to /dev/null as well:
+            os.system(f'{sys.executable} ./viz/rm_bg.py --img_path {img_with_bg}')
         except:
             viz.result.error = renderer.CapturedException()
 
