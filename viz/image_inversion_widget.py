@@ -42,7 +42,7 @@ def invert(inv_q, network, img):
                                      save_video=True,
                                      seed=666,
                                      num_steps=500,
-                                     num_steps_pti=500,
+                                     num_steps_pti=25,
                                      fps=5,
                                      shapes=False,)
     while not inv_q.empty():
@@ -103,7 +103,7 @@ class InvImgWidget:
                 # print(f'self.png_aquired : {self.png_aquired} and self.png_used{self.png_used} and self.path_changed{self.path_changed}')
             elif self.png_aquired and self.png_used and self.path_changed:
                 inv_path = os.path.join(os.path.dirname(self.path_sofar),
-                                        'easy-khair-180-gpc0.8-trans10-025000.pkl')
+                                        'chkpt_360.pkl')
                 print('Sending new picke and w file')
                 self.set_pkl_path(os.path.join(inv_path, '0/fintuned_generator.pkl'))
                 self.path_changed = False
