@@ -319,11 +319,7 @@ def main(
     # List pickles.
     pretrained = [
         'https://api.ngc.nvidia.com/v2/models/nvidia/research/eg3d/versions/1/files/ffhq512-128.pkl',
-        'https://api.ngc.nvidia.com/v2/models/nvidia/research/eg3d/versions/1/files/afhqcats512-128.pkl',
-        'https://api.ngc.nvidia.com/v2/models/nvidia/research/eg3d/versions/1/files/ffhqrebalanced512-64.pkl',
-        'https://api.ngc.nvidia.com/v2/models/nvidia/research/eg3d/versions/1/files/ffhqrebalanced512-128.pkl',
-        'https://api.ngc.nvidia.com/v2/models/nvidia/research/eg3d/versions/1/files/shapenetcars128-64.pkl',
-        '/home/pghosh/Downloads/easy-khair-180-gpc0.8-trans10-025000.pkl'
+        '/home/pghosh/NeurCG_Assets/chkpt_360.pkl'
     ]
 
     # Populate recent pickles list with pretrained model URLs.
